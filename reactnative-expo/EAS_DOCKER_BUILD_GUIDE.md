@@ -123,6 +123,9 @@ FROM reactnativecommunity/react-native-android:latest
 # TLS handshake failures against Maven Central and other HTTPS hosts in Docker Desktop Windows
 RUN apt-get update -qq && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates
 
+# pnpm is required by this project (packageManager field in package.json)
+RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
+
 # Install EAS CLI globally (cached in image layer)
 RUN npm install -g eas-cli@latest
 
@@ -136,7 +139,7 @@ services:
   eas-build:
     build:
       context: .
-      dockerfile: Dockerfile.eas
+      dockerfile: Dockerfile
 
     # Use host network — container shares Windows/WSL2 network stack directly.
     # This fixes all DNS issues without any extra config or IP pinning.
@@ -164,26 +167,18 @@ services:
     # This forces Java to use IPv4, fixing all Gradle/SDK download DNS failures.
     environment:
       - _JAVA_OPTIONS=-Djava.net.preferIPv4Stack=true -Dhttps.protocols=TLSv1.2,TLSv1.3 -Djdk.tls.client.protocols=TLSv1.2,TLSv1.3
+      - ANDROID_HOME=/opt/android
+      - ANDROID_SDK_ROOT=/opt/android
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
-    # Load all env vars from .env.local (Supabase keys, Firebase paths, EXPO_TOKEN, etc.)
+    # Load all env vars from .env.local (EXPO_TOKEN required for --non-interactive)
     env_file:
       - .env.local
 
-    # Default profile is "preview" — override by passing arg:
-    #   docker compose ... run --rm eas-build production
-    entrypoint: >
-      bash -c "
-        echo '--- Installing dependencies ---' &&
-        npm install &&
-        echo '--- Starting EAS local build ---' &&
-        for attempt in 1 2 3; do
-          eas build --local --platform android --profile $${1:-preview} --non-interactive && break
-          echo \"--- Attempt $$attempt failed, retrying in 5s... ---\" &&
-          sleep 5
-        done &&
-        echo '--- Build complete. APK is in your project folder. ---'
-      "
-    command: preview
+    # Default profile is "preview" — override:
+    #   docker compose run --rm eas-build development
+    entrypoint: ["/bin/bash", "/app/scripts/docker-eas-build.sh"]
+    command: ["preview"]
 
 volumes:
   # node_modules: auto-named per project (e.g. nwt-servicehub_node_modules)
