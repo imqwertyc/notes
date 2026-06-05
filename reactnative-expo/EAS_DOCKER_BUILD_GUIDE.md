@@ -139,7 +139,7 @@ services:
   eas-build:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.eas
 
     # Use host network — container shares Windows/WSL2 network stack directly.
     # This fixes all DNS issues without any extra config or IP pinning.
